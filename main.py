@@ -86,6 +86,30 @@ for job in data:
 except:
 pass
 
+---------- LinkedIn ----------
+
+for term in SEARCH_TERMS:
+try:
+url = f"https://www.linkedin.com/jobs/search/?keywords={term.replace(' ', '%20')}"
+page = requests.get(url, headers=headers, timeout=10)
+soup = BeautifulSoup(page.text, "html.parser")
+
+    for card in soup.select(".base-search-card")[:5]:
+        title_tag = card.select_one(".base-search-card__title")
+        link_tag = card.select_one("a")
+
+        title = title_tag.get_text(strip=True) if title_tag else ""
+        link = link_tag["href"] if link_tag else url
+
+        jobs.append({
+            "title": title,
+            "desc": title,
+            "link": link
+        })
+
+except:
+    pass
+
 # ---------- Indeed India ----------
 
 for term in SEARCH_TERMS:
