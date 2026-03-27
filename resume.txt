@@ -1,0 +1,40 @@
+Data Analyst with 1+ year experience in SQL, Python, Power BI, BigQuery, Looker Studio, ETL pipelines, API integration, data modeling, reporting automation, and marketing analytics.
+
+Skills:
+SQL
+MySQL
+BigQuery
+Python
+Pandas
+NumPy
+Matplotlib
+Power BI
+DAX
+Power Query
+Looker Studio
+Excel
+Google Sheets
+Google Cloud Storage
+Cloud Scheduler
+API Integration
+ETL
+Data Cleaning
+Data Warehousing
+Dashboarding
+Reporting Automation
+
+Experience:
+Built automated ETL pipelines using Python to extract data from Google Ads, Meta Ads, Metabase, and CRM systems into BigQuery.
+Created centralized master datasets through data modeling and lead lifecycle reporting.
+Automated Google Sheets live reporting systems reducing manual effort by 85%.
+Developed Power BI and Looker Studio dashboards for CTR, CPC, Conversion Rate, CPL, ROI, and KPI tracking.
+Performed campaign analysis, lead funnel analysis, marketing analytics, UTM standardization, deduplication, and reporting automation.
+
+Keywords:
+Data Analyst
+Junior Data Analyst
+Business Analyst
+Reporting Analyst
+SQL Analyst
+Power BI Analyst
+BI Analyst
