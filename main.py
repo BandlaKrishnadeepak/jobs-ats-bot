@@ -17,17 +17,25 @@ SENT_FILE = "sent_jobs.json"
 
 SEARCH_TERMS = [
     "data analyst",
-    "junior data analyst",
-    "associate data analyst",
     "business analyst",
-    "reporting analyst",
     "sql analyst",
     "power bi analyst",
-    "tableau developer",
-    "excel analyst",
-    "data insights analyst",
+    "reporting analyst",
     "bi analyst",
-    "research analyst"
+    "marketing analyst"
+]
+
+BAD_WORDS = [
+    "senior", "lead", "manager", "director", "architect", "5 years", "7 years"
+]
+
+IMPORTANT_KEYWORDS = [
+    "sql", "python", "power bi", "tableau", "bigquery",
+    "excel", "etl", "dashboard", "analytics",
+    "kpi", "reporting", "data modeling",
+    "forecasting", "statistics", "machine learning",
+    "google ads", "meta ads", "looker studio",
+    "cloud scheduler", "crm", "marketing analytics"
 ]
 
 if os.path.exists(SENT_FILE):
@@ -44,7 +52,6 @@ headers = {
 }
 
 jobs = []
-
 cutoff_date = datetime.utcnow() - timedelta(days=2)
 
 
@@ -75,32 +82,28 @@ def ats_score(resume, jd):
     return int(score * 100)
 
 
-def missing_keywords(resume, jd):
-    important = [
-        "sql", "python", "power bi", "tableau", "bigquery",
-        "excel", "etl", "dashboard", "analytics",
-        "kpi", "reporting", "data modeling",
-        "forecasting", "statistics", "machine learning",
-        "google ads", "meta ads", "looker studio",
-        "cloud scheduler", "crm", "marketing analytics"
-    ]
-
+def analyze_match(resume, jd):
+    matched = []
     missing = []
 
-    for word in important:
-        if word in jd.lower() and word not in resume.lower():
-            missing.append(word)
+    for word in IMPORTANT_KEYWORDS:
+        if word in jd.lower():
+            if word in resume.lower():
+                matched.append(word)
+            else:
+                missing.append(word)
 
-    return missing[:5]
+    return matched[:5], missing[:5]
 
 
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {
-        "chat_id": CHAT_ID,
-        "text": msg
-    }
+    data = {"chat_id": CHAT_ID, "text": msg}
     requests.post(url, data=data)
+
+
+def valid_title(title):
+    return not any(bad in title.lower() for bad in BAD_WORDS)
 
 
 # ---------- RemoteOK ----------
@@ -120,15 +123,11 @@ try:
         except:
             continue
 
-        if posted_date >= cutoff_date:
+        if posted_date >= cutoff_date and valid_title(title):
             if any(term in title.lower() for term in SEARCH_TERMS):
-                jobs.append({
-                    "title": title,
-                    "desc": desc,
-                    "link": link
-                })
+                jobs.append(("RemoteOK", title, desc, link))
 
-except Exception:
+except:
     pass
 
 # ---------- Remotive ----------
@@ -148,111 +147,118 @@ try:
         except:
             continue
 
-        if posted_date >= cutoff_date:
+        if posted_date >= cutoff_date and valid_title(title):
             if any(term in title.lower() for term in SEARCH_TERMS):
-                jobs.append({
-                    "title": title,
-                    "desc": desc,
-                    "link": link
-                })
+                jobs.append(("Remotive", title, desc, link))
 
-except Exception:
+except:
     pass
+
+# ---------- Generic scraper helper ----------
+
+
+def scrape_platform(platform, base_url, selector, title_selector=None):
+    for term in SEARCH_TERMS:
+        try:
+            url = base_url.format(term.replace(" ", "+"), term.replace(" ", "-"), term.replace(" ", "%20"))
+            page = requests.get(url, headers=headers, timeout=10)
+            soup = BeautifulSoup(page.text, "html.parser")
+
+            for card in soup.select(selector)[:5]:
+                title_tag = card.select_one(title_selector) if title_selector else card.select_one("a")
+                title = title_tag.get_text(strip=True) if title_tag else ""
+                link = title_tag.get("href") if title_tag else url
+
+                if link and link.startswith("/"):
+                    if "indeed" in url:
+                        link = "https://in.indeed.com" + link
+
+                if valid_title(title):
+                    jobs.append((platform, title, title, link if link else url))
+
+        except:
+            pass
+
 
 # ---------- LinkedIn ----------
 
-for term in SEARCH_TERMS:
-    try:
-        url = f"https://www.linkedin.com/jobs/search/?keywords={term.replace(' ', '%20')}"
-        page = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(page.text, "html.parser")
-
-        for card in soup.select(".base-search-card")[:5]:
-            title_tag = card.select_one(".base-search-card__title")
-            link_tag = card.select_one("a")
-            date_tag = card.select_one("time")
-
-            title = title_tag.get_text(strip=True) if title_tag else ""
-            link = link_tag["href"] if link_tag else url
-            posted = date_tag.get_text(strip=True) if date_tag else ""
-
-            if is_recent(posted):
-                jobs.append({
-                    "title": title,
-                    "desc": title,
-                    "link": link
-                })
-
-    except Exception:
-        pass
+scrape_platform(
+    "LinkedIn",
+    "https://www.linkedin.com/jobs/search/?keywords={2}",
+    ".base-search-card",
+    ".base-search-card__title"
+)
 
 # ---------- Indeed ----------
 
-for term in SEARCH_TERMS:
-    try:
-        url = f"https://in.indeed.com/jobs?q={term.replace(' ', '+')}"
-        page = requests.get(url, headers=headers)
-        soup = BeautifulSoup(page.text, "html.parser")
-
-        for card in soup.select(".job_seen_beacon")[:5]:
-            title = card.get_text(strip=True)
-            date_tag = card.select_one(".date")
-            posted = date_tag.get_text(strip=True) if date_tag else ""
-
-            if is_recent(posted):
-                jobs.append({
-                    "title": title,
-                    "desc": title,
-                    "link": url
-                })
-
-    except Exception:
-        pass
+scrape_platform(
+    "Indeed",
+    "https://in.indeed.com/jobs?q={0}",
+    ".job_seen_beacon",
+    "h2 a"
+)
 
 # ---------- Naukri ----------
 
-for term in SEARCH_TERMS:
-    try:
-        url = f"https://www.naukri.com/{term.replace(' ', '-')}-jobs"
-        page = requests.get(url, headers=headers)
-        soup = BeautifulSoup(page.text, "html.parser")
+scrape_platform(
+    "Naukri",
+    "https://www.naukri.com/{1}-jobs",
+    "article",
+    "a"
+)
 
-        for card in soup.select("article")[:5]:
-            title = card.get_text(strip=True)
-            date_tag = card.select_one(".jobTupleFooter")
-            posted = date_tag.get_text(strip=True) if date_tag else ""
+# ---------- Foundit ----------
 
-            if is_recent(posted):
-                jobs.append({
-                    "title": title,
-                    "desc": title,
-                    "link": url
-                })
+scrape_platform(
+    "Foundit",
+    "https://www.foundit.in/srp/results?query={0}",
+    "section",
+    "a"
+)
 
-    except Exception:
-        pass
+# ---------- Glassdoor ----------
 
-# ---------- Process Jobs and Send Telegram Notifications ----------
+scrape_platform(
+    "Glassdoor",
+    "https://www.glassdoor.co.in/Job/jobs.htm?sc.keyword={0}",
+    "li",
+    "a"
+)
 
-for job in jobs:
-    score = ats_score(resume, job["desc"])
-    missing = missing_keywords(resume, job["desc"])
+# ---------- Wellfound ----------
 
-    print(job["title"], score)
+scrape_platform(
+    "Wellfound",
+    "https://wellfound.com/jobs?query={0}",
+    "div",
+    "a"
+)
 
-    if job["link"] not in sent_jobs and score >= 30:
-        msg = f"""🔥 Job Match ({score}%)
+# ---------- Final send ----------
 
-Title: {job['title']}
+for platform, title, desc, link in jobs:
+    score = ats_score(resume, desc)
+    matched, missing = analyze_match(resume, desc)
 
-Missing Keywords:
-{', '.join(missing) if missing else 'None'}
+    reason = f"Matched: {', '.join(matched)}" if matched else "Few direct keyword matches"
+    improve = f"Add: {', '.join(missing)}" if missing else "Resume already covers major keywords"
+
+    if link not in sent_jobs and score >= 30:
+        msg = f"""🔥 {platform} Job Match ({score}%)
+
+Title: {title}
+
+Why this score:
+{reason}
+
+Improve score:
+{improve}
 
 Apply:
-{job['link']}
+{link}
 """
         send_telegram(msg[:3500])
-        sent_jobs.append(job["link"])
+        sent_jobs.append(link)
 
         with open(SENT_FILE, "w") as f:
             json.dump(sent_jobs, f)
