@@ -43,7 +43,7 @@ headers = {
 
 jobs = []
 
----------- RemoteOK ----------
+#---------- RemoteOK ----------
 
 try:
 res = requests.get("https://remoteok.com/api", headers=headers)
@@ -64,7 +64,7 @@ for job in data:
 except Exception:
 pass
 
----------- Remotive ----------
+#---------- Remotive ----------
 
 try:
 res = requests.get("https://remotive.io/api/remote-jobs", headers=headers)
@@ -85,7 +85,7 @@ for job in data:
 except Exception:
 pass
 
----------- LinkedIn ----------
+#---------- LinkedIn ----------
 
 for term in SEARCH_TERMS:
 try:
@@ -108,7 +108,7 @@ soup = BeautifulSoup(page.text, "html.parser")
 
 except Exception:
     pass
----------- Indeed ----------
+#---------- Indeed ----------
 
 for term in SEARCH_TERMS:
 try:
@@ -127,7 +127,7 @@ soup = BeautifulSoup(page.text, "html.parser")
 
 except Exception:
     pass
----------- Naukri ----------
+#---------- Naukri ----------
 
 for term in SEARCH_TERMS:
 try:
