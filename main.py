@@ -9,7 +9,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 if not BOT_TOKEN or not CHAT_ID:
-    raise ValueError("Missing BOT_TOKEN or CHAT_ID in GitHub Secrets")
+raise ValueError("Missing BOT_TOKEN or CHAT_ID in GitHub Secrets")
 
 SENT_FILE = "sent_jobs.json"
 
@@ -29,10 +29,10 @@ SEARCH_TERMS = [
 ]
 
 if os.path.exists(SENT_FILE):
-    with open(SENT_FILE, "r") as f:
-    sent_jobs = json.load(f)
+with open(SENT_FILE, "r") as f:
+sent_jobs = json.load(f)
 else:
-    sent_jobs = []
+sent_jobs = []
 
 with open("resume.txt", "r", encoding="utf-8") as f:
 resume = f.read()
@@ -43,13 +43,12 @@ headers = {
 
 jobs = []
 
-# ---------- RemoteOK ----------
+---------- RemoteOK ----------
 
 try:
-    res = requests.get("https://remoteok.com/api", headers=headers)
-    data = res.json()[1:]
+res = requests.get("https://remoteok.com/api", headers=headers)
+data = res.json()[1:]
 
-```
 for job in data:
     title = job.get("position", "")
     desc = job.get("description", "")
@@ -61,18 +60,16 @@ for job in data:
             "desc": desc,
             "link": link
         })
-```
 
 except Exception:
 pass
 
-# ---------- Remotive ----------
+---------- Remotive ----------
 
 try:
-    res = requests.get("https://remotive.io/api/remote-jobs", headers=headers)
-    data = res.json()["jobs"]
+res = requests.get("https://remotive.io/api/remote-jobs", headers=headers)
+data = res.json()["jobs"]
 
-```
 for job in data:
     title = job.get("title", "")
     desc = job.get("description", "")
@@ -84,20 +81,18 @@ for job in data:
             "desc": desc,
             "link": link
         })
-```
 
 except Exception:
 pass
 
-# ---------- LinkedIn ----------
+---------- LinkedIn ----------
 
 for term in SEARCH_TERMS:
 try:
-    url = f"https://www.linkedin.com/jobs/search/?keywords={term.replace(' ', '%20')}"
-    page = requests.get(url, headers=headers, timeout=10)
-    soup = BeautifulSoup(page.text, "html.parser")
+url = f"https://www.linkedin.com/jobs/search/?keywords={term.replace(' ', '%20')}"
+page = requests.get(url, headers=headers, timeout=10)
+soup = BeautifulSoup(page.text, "html.parser")
 
-```
     for card in soup.select(".base-search-card")[:5]:
         title_tag = card.select_one(".base-search-card__title")
         link_tag = card.select_one("a")
@@ -113,17 +108,14 @@ try:
 
 except Exception:
     pass
-```
-
-# ---------- Indeed ----------
+---------- Indeed ----------
 
 for term in SEARCH_TERMS:
 try:
-    url = f"https://in.indeed.com/jobs?q={term.replace(' ', '+')}"
-    page = requests.get(url, headers=headers)
-    soup = BeautifulSoup(page.text, "html.parser")
+url = f"https://in.indeed.com/jobs?q={term.replace(' ', '+')}"
+page = requests.get(url, headers=headers)
+soup = BeautifulSoup(page.text, "html.parser")
 
-```
     for card in soup.select(".job_seen_beacon")[:5]:
         title = card.get_text(strip=True)
 
@@ -135,17 +127,14 @@ try:
 
 except Exception:
     pass
-```
-
-# ---------- Naukri ----------
+---------- Naukri ----------
 
 for term in SEARCH_TERMS:
 try:
-    url = f"https://www.naukri.com/{term.replace(' ', '-')}-jobs"
-    page = requests.get(url, headers=headers)
-    soup = BeautifulSoup(page.text, "html.parser")
+url = f"https://www.naukri.com/{term.replace(' ', '-')}-jobs"
+page = requests.get(url, headers=headers)
+soup = BeautifulSoup(page.text, "html.parser")
 
-```
     for card in soup.select("article")[:5]:
         title = card.get_text(strip=True)
 
@@ -157,7 +146,6 @@ try:
 
 except Exception:
     pass
-```
 
 def ats_score(resume, jd):
 vectorizer = TfidfVectorizer(stop_words="english")
@@ -173,12 +161,10 @@ requests.post(url, data=data)
 for job in jobs:
 score = ats_score(resume, job["desc"])
 
-```
 if job["link"] not in sent_jobs and score >= 70:
     msg = f"🔥 Job Match ({score}%)\n\nTitle: {job['title']}\n\nApply: {job['link']}"
     send_telegram(msg[:3500])
     sent_jobs.append(job["link"])
-```
 
 with open(SENT_FILE, "w") as f:
 json.dump(sent_jobs, f)
