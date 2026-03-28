@@ -29,10 +29,10 @@ SEARCH_TERMS = [
 ]
 
 if os.path.exists(SENT_FILE):
-with open(SENT_FILE, "r") as f:
-sent_jobs = json.load(f)
+    with open(SENT_FILE, "r") as f:
+    sent_jobs = json.load(f)
 else:
-sent_jobs = []
+    sent_jobs = []
 
 with open("resume.txt", "r", encoding="utf-8") as f:
 resume = f.read()
@@ -46,8 +46,8 @@ jobs = []
 # ---------- RemoteOK ----------
 
 try:
-res = requests.get("https://remoteok.com/api", headers=headers)
-data = res.json()[1:]
+    res = requests.get("https://remoteok.com/api", headers=headers)
+    data = res.json()[1:]
 
 ```
 for job in data:
@@ -69,8 +69,8 @@ pass
 # ---------- Remotive ----------
 
 try:
-res = requests.get("https://remotive.io/api/remote-jobs", headers=headers)
-data = res.json()["jobs"]
+    res = requests.get("https://remotive.io/api/remote-jobs", headers=headers)
+    data = res.json()["jobs"]
 
 ```
 for job in data:
@@ -93,9 +93,9 @@ pass
 
 for term in SEARCH_TERMS:
 try:
-url = f"https://www.linkedin.com/jobs/search/?keywords={term.replace(' ', '%20')}"
-page = requests.get(url, headers=headers, timeout=10)
-soup = BeautifulSoup(page.text, "html.parser")
+    url = f"https://www.linkedin.com/jobs/search/?keywords={term.replace(' ', '%20')}"
+    page = requests.get(url, headers=headers, timeout=10)
+    soup = BeautifulSoup(page.text, "html.parser")
 
 ```
     for card in soup.select(".base-search-card")[:5]:
@@ -119,9 +119,9 @@ except Exception:
 
 for term in SEARCH_TERMS:
 try:
-url = f"https://in.indeed.com/jobs?q={term.replace(' ', '+')}"
-page = requests.get(url, headers=headers)
-soup = BeautifulSoup(page.text, "html.parser")
+    url = f"https://in.indeed.com/jobs?q={term.replace(' ', '+')}"
+    page = requests.get(url, headers=headers)
+    soup = BeautifulSoup(page.text, "html.parser")
 
 ```
     for card in soup.select(".job_seen_beacon")[:5]:
@@ -141,9 +141,9 @@ except Exception:
 
 for term in SEARCH_TERMS:
 try:
-url = f"https://www.naukri.com/{term.replace(' ', '-')}-jobs"
-page = requests.get(url, headers=headers)
-soup = BeautifulSoup(page.text, "html.parser")
+    url = f"https://www.naukri.com/{term.replace(' ', '-')}-jobs"
+    page = requests.get(url, headers=headers)
+    soup = BeautifulSoup(page.text, "html.parser")
 
 ```
     for card in soup.select("article")[:5]:
