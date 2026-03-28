@@ -169,7 +169,7 @@ def send_telegram(msg):
 for job in jobs:
     score = ats_score(resume, job["desc"])
 
-    if job["link"] not in sent_jobs and score >= 70:
+    if job["link"] not in sent_jobs and score >= 30:
         msg = f"🔥 Job Match ({score}%)\n\nTitle: {job['title']}\n\nApply: {job['link']}"
         send_telegram(msg[:3500])
         sent_jobs.append(job["link"])
