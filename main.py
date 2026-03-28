@@ -62,7 +62,7 @@ try:
             })
 
 except Exception:
-pass
+                pass
 
 #---------- Remotive ----------
 
@@ -83,7 +83,7 @@ try:
             })
 
 except Exception:
-pass
+                pass
 
 #---------- LinkedIn ----------
 
@@ -107,7 +107,7 @@ try:
         })
 
 except Exception:
-    pass
+                pass
 #---------- Indeed ----------
 
 for term in SEARCH_TERMS:
@@ -126,7 +126,7 @@ try:
         })
 
 except Exception:
-    pass
+                pass
 #---------- Naukri ----------
 
 for term in SEARCH_TERMS:
@@ -145,7 +145,7 @@ try:
         })
 
 except Exception:
-    pass
+                pass
 
 def ats_score(resume, jd):
 vectorizer = TfidfVectorizer(stop_words="english")
