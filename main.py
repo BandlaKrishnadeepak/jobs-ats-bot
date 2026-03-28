@@ -8,6 +8,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
+if not BOT_TOKEN or not CHAT_ID:
+raise ValueError("Missing BOT_TOKEN or CHAT_ID in GitHub Secrets")
+
 SENT_FILE = "sent_jobs.json"
 
 SEARCH_TERMS = [
@@ -60,7 +63,7 @@ for job in data:
         })
 ```
 
-except:
+except Exception:
 pass
 
 # ---------- Remotive ----------
@@ -83,10 +86,10 @@ for job in data:
         })
 ```
 
-except:
+except Exception:
 pass
 
----------- LinkedIn ----------
+# ---------- LinkedIn ----------
 
 for term in SEARCH_TERMS:
 try:
@@ -94,6 +97,7 @@ url = f"https://www.linkedin.com/jobs/search/?keywords={term.replace(' ', '%20')
 page = requests.get(url, headers=headers, timeout=10)
 soup = BeautifulSoup(page.text, "html.parser")
 
+```
     for card in soup.select(".base-search-card")[:5]:
         title_tag = card.select_one(".base-search-card__title")
         link_tag = card.select_one("a")
@@ -107,10 +111,11 @@ soup = BeautifulSoup(page.text, "html.parser")
             "link": link
         })
 
-except:
+except Exception:
     pass
+```
 
-# ---------- Indeed India ----------
+# ---------- Indeed ----------
 
 for term in SEARCH_TERMS:
 try:
@@ -127,7 +132,8 @@ soup = BeautifulSoup(page.text, "html.parser")
             "desc": title,
             "link": url
         })
-except:
+
+except Exception:
     pass
 ```
 
@@ -148,12 +154,13 @@ soup = BeautifulSoup(page.text, "html.parser")
             "desc": title,
             "link": url
         })
-except:
+
+except Exception:
     pass
 ```
 
 def ats_score(resume, jd):
-vectorizer = TfidfVectorizer(stop_words='english')
+vectorizer = TfidfVectorizer(stop_words="english")
 vectors = vectorizer.fit_transform([resume, jd])
 score = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
 return int(score * 100)
