@@ -9,7 +9,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 if not BOT_TOKEN or not CHAT_ID:
-raise ValueError("Missing BOT_TOKEN or CHAT_ID in GitHub Secrets")
+    raise ValueError("Missing BOT_TOKEN or CHAT_ID in GitHub Secrets")
 
 SENT_FILE = "sent_jobs.json"
 
