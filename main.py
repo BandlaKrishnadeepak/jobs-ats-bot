@@ -49,17 +49,17 @@ try:
     res = requests.get("https://remoteok.com/api", headers=headers)
     data = res.json()[1:]
 
-for job in data:
-    title = job.get("position", "")
-    desc = job.get("description", "")
-    link = job.get("url", "")
+    for job in data:
+        title = job.get("position", "")
+        desc = job.get("description", "")
+        link = job.get("url", "")
 
-    if any(term in title.lower() for term in SEARCH_TERMS):
-        jobs.append({
-            "title": title,
-            "desc": desc,
-            "link": link
-        })
+        if any(term in title.lower() for term in SEARCH_TERMS):
+            jobs.append({
+                "title": title,
+                "desc": desc,
+                "link": link
+            })
 
 except Exception:
 pass
@@ -70,17 +70,17 @@ try:
     res = requests.get("https://remotive.io/api/remote-jobs", headers=headers)
     data = res.json()["jobs"]
 
-for job in data:
-    title = job.get("title", "")
-    desc = job.get("description", "")
-    link = job.get("url", "")
+    for job in data:
+        title = job.get("title", "")
+        desc = job.get("description", "")
+        link = job.get("url", "")
 
-    if any(term in title.lower() for term in SEARCH_TERMS):
-        jobs.append({
-            "title": title,
-            "desc": desc,
-            "link": link
-        })
+        if any(term in title.lower() for term in SEARCH_TERMS):
+            jobs.append({
+                "title": title,
+                "desc": desc,
+                "link": link
+            })
 
 except Exception:
 pass
