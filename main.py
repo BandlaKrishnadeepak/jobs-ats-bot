@@ -29,8 +29,8 @@ SEARCH_TERMS = [
 ]
 
 if os.path.exists(SENT_FILE):
-with open(SENT_FILE, "r") as f:
-sent_jobs = json.load(f)
+    with open(SENT_FILE, "r") as f:
+    sent_jobs = json.load(f)
 else:
 sent_jobs = []
 
