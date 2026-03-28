@@ -14,18 +14,18 @@ if not BOT_TOKEN or not CHAT_ID:
 SENT_FILE = "sent_jobs.json"
 
 SEARCH_TERMS = [
-"data analyst",
-"junior data analyst",
-"associate data analyst",
-"business analyst",
-"reporting analyst",
-"sql analyst",
-"power bi analyst",
-"tableau developer",
-"excel analyst",
-"data insights analyst",
-"bi analyst",
-"research analyst"
+    "data analyst",
+    "junior data analyst",
+    "associate data analyst",
+    "business analyst",
+    "reporting analyst",
+    "sql analyst",
+    "power bi analyst",
+    "tableau developer",
+    "excel analyst",
+    "data insights analyst",
+    "bi analyst",
+    "research analyst"
 ]
 
 if os.path.exists(SENT_FILE):
@@ -38,12 +38,12 @@ with open("resume.txt", "r", encoding="utf-8") as f:
     resume = f.read()
 
 headers = {
-"User-Agent": "Mozilla/5.0"
+    "User-Agent": "Mozilla/5.0"
 }
 
 jobs = []
 
-#---------- RemoteOK ----------
+# ---------- RemoteOK ----------
 
 try:
     res = requests.get("https://remoteok.com/api", headers=headers)
@@ -62,9 +62,9 @@ try:
             })
 
 except Exception:
-                pass
+    pass
 
-#---------- Remotive ----------
+# ---------- Remotive ----------
 
 try:
     res = requests.get("https://remotive.io/api/remote-jobs", headers=headers)
@@ -83,88 +83,96 @@ try:
             })
 
 except Exception:
-                pass
+    pass
 
-#---------- LinkedIn ----------
-
-for term in SEARCH_TERMS:
-try:
-    url = f"https://www.linkedin.com/jobs/search/?keywords={term.replace(' ', '%20')}"
-    page = requests.get(url, headers=headers, timeout=10)
-    soup = BeautifulSoup(page.text, "html.parser")
-
-    for card in soup.select(".base-search-card")[:5]:
-        title_tag = card.select_one(".base-search-card__title")
-        link_tag = card.select_one("a")
-
-        title = title_tag.get_text(strip=True) if title_tag else ""
-        link = link_tag["href"] if link_tag else url
-
-        jobs.append({
-            "title": title,
-            "desc": title,
-            "link": link
-        })
-
-except Exception:
-                pass
-#---------- Indeed ----------
+# ---------- LinkedIn ----------
 
 for term in SEARCH_TERMS:
-try:
-    url = f"https://in.indeed.com/jobs?q={term.replace(' ', '+')}"
-    page = requests.get(url, headers=headers)
-    soup = BeautifulSoup(page.text, "html.parser")
+    try:
+        url = f"https://www.linkedin.com/jobs/search/?keywords={term.replace(' ', '%20')}"
+        page = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(page.text, "html.parser")
 
-    for card in soup.select(".job_seen_beacon")[:5]:
-        title = card.get_text(strip=True)
+        for card in soup.select(".base-search-card")[:5]:
+            title_tag = card.select_one(".base-search-card__title")
+            link_tag = card.select_one("a")
 
-        jobs.append({
-            "title": title,
-            "desc": title,
-            "link": url
-        })
+            title = title_tag.get_text(strip=True) if title_tag else ""
+            link = link_tag["href"] if link_tag else url
 
-except Exception:
-                pass
-#---------- Naukri ----------
+            jobs.append({
+                "title": title,
+                "desc": title,
+                "link": link
+            })
+
+    except Exception:
+        pass
+
+# ---------- Indeed ----------
 
 for term in SEARCH_TERMS:
-try:
-    url = f"https://www.naukri.com/{term.replace(' ', '-')}-jobs"
-    page = requests.get(url, headers=headers)
-    soup = BeautifulSoup(page.text, "html.parser")
+    try:
+        url = f"https://in.indeed.com/jobs?q={term.replace(' ', '+')}"
+        page = requests.get(url, headers=headers)
+        soup = BeautifulSoup(page.text, "html.parser")
 
-    for card in soup.select("article")[:5]:
-        title = card.get_text(strip=True)
+        for card in soup.select(".job_seen_beacon")[:5]:
+            title = card.get_text(strip=True)
 
-        jobs.append({
-            "title": title,
-            "desc": title,
-            "link": url
-        })
+            jobs.append({
+                "title": title,
+                "desc": title,
+                "link": url
+            })
 
-except Exception:
-                pass
+    except Exception:
+        pass
+
+# ---------- Naukri ----------
+
+for term in SEARCH_TERMS:
+    try:
+        url = f"https://www.naukri.com/{term.replace(' ', '-')}-jobs"
+        page = requests.get(url, headers=headers)
+        soup = BeautifulSoup(page.text, "html.parser")
+
+        for card in soup.select("article")[:5]:
+            title = card.get_text(strip=True)
+
+            jobs.append({
+                "title": title,
+                "desc": title,
+                "link": url
+            })
+
+    except Exception:
+        pass
+
 
 def ats_score(resume, jd):
-vectorizer = TfidfVectorizer(stop_words="english")
-vectors = vectorizer.fit_transform([resume, jd])
-score = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
-return int(score * 100)
+    vectorizer = TfidfVectorizer(stop_words="english")
+    vectors = vectorizer.fit_transform([resume, jd])
+    score = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
+    return int(score * 100)
+
 
 def send_telegram(msg):
-url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-data = {"chat_id": CHAT_ID, "text": msg}
-requests.post(url, data=data)
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    data = {
+        "chat_id": CHAT_ID,
+        "text": msg
+    }
+    requests.post(url, data=data)
+
 
 for job in jobs:
-score = ats_score(resume, job["desc"])
+    score = ats_score(resume, job["desc"])
 
-if job["link"] not in sent_jobs and score >= 70:
-    msg = f"🔥 Job Match ({score}%)\n\nTitle: {job['title']}\n\nApply: {job['link']}"
-    send_telegram(msg[:3500])
-    sent_jobs.append(job["link"])
+    if job["link"] not in sent_jobs and score >= 70:
+        msg = f"🔥 Job Match ({score}%)\n\nTitle: {job['title']}\n\nApply: {job['link']}"
+        send_telegram(msg[:3500])
+        sent_jobs.append(job["link"])
 
 with open(SENT_FILE, "w") as f:
-json.dump(sent_jobs, f)
+    json.dump(sent_jobs, f)
