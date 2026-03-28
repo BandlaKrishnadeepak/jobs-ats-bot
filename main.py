@@ -35,7 +35,7 @@ else:
     sent_jobs = []
 
 with open("resume.txt", "r", encoding="utf-8") as f:
-resume = f.read()
+    resume = f.read()
 
 headers = {
 "User-Agent": "Mozilla/5.0"
