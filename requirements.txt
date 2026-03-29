@@ -1,4 +1,5 @@
-jobspy
+python-jobspy
 requests
 scikit-learn
 pandas
+beautifulsoup4
