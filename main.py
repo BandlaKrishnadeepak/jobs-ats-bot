@@ -55,26 +55,6 @@ jobs = []
 cutoff_date = datetime.utcnow() - timedelta(days=2)
 
 
-def is_recent(posted_text):
-    posted_text = posted_text.lower()
-
-    if "today" in posted_text or "just" in posted_text:
-        return True
-
-    match = re.search(r'(\d+)', posted_text)
-
-    if match:
-        num = int(match.group(1))
-
-        if "hour" in posted_text:
-            return num <= 48
-
-        if "day" in posted_text:
-            return num <= 2
-
-    return False
-
-
 def ats_score(resume, jd):
     vectorizer = TfidfVectorizer(stop_words="english")
     vectors = vectorizer.fit_transform([resume, jd])
@@ -130,6 +110,7 @@ try:
 except:
     pass
 
+
 # ---------- Remotive ----------
 
 try:
@@ -154,89 +135,80 @@ try:
 except:
     pass
 
-# ---------- Generic scraper helper ----------
-
-
-def scrape_platform(platform, base_url, selector, title_selector=None):
-    for term in SEARCH_TERMS:
-        try:
-            url = base_url.format(term.replace(" ", "+"), term.replace(" ", "-"), term.replace(" ", "%20"))
-            page = requests.get(url, headers=headers, timeout=10)
-            soup = BeautifulSoup(page.text, "html.parser")
-
-            for card in soup.select(selector)[:5]:
-                title_tag = card.select_one(title_selector) if title_selector else card.select_one("a")
-                title = title_tag.get_text(strip=True) if title_tag else ""
-                link = title_tag.get("href") if title_tag else url
-
-                if link and link.startswith("/"):
-                    if "indeed" in url:
-                        link = "https://in.indeed.com" + link
-
-                if valid_title(title):
-                    jobs.append((platform, title, title, link if link else url))
-
-        except:
-            pass
-
 
 # ---------- LinkedIn ----------
 
-scrape_platform(
-    "LinkedIn",
-    "https://www.linkedin.com/jobs/search/?keywords={2}",
-    ".base-search-card",
-    ".base-search-card__title"
-)
+for term in SEARCH_TERMS:
+    try:
+        url = f"https://www.linkedin.com/jobs/search/?keywords={term.replace(' ', '%20')}"
+        page = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(page.text, "html.parser")
+
+        for card in soup.select(".base-search-card")[:5]:
+            title_tag = card.select_one(".base-search-card__title")
+            link_tag = card.select_one("a.base-card__full-link")
+
+            title = title_tag.get_text(strip=True) if title_tag else ""
+            link = link_tag["href"] if link_tag else ""
+
+            if valid_title(title) and link:
+                jobs.append(("LinkedIn", title, title, link))
+
+    except:
+        pass
+
 
 # ---------- Indeed ----------
 
-scrape_platform(
-    "Indeed",
-    "https://in.indeed.com/jobs?q={0}",
-    ".job_seen_beacon",
-    "h2 a"
-)
+for term in SEARCH_TERMS:
+    try:
+        url = f"https://in.indeed.com/jobs?q={term.replace(' ', '+')}"
+        page = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(page.text, "html.parser")
+
+        for card in soup.select(".job_seen_beacon")[:5]:
+            title_tag = card.select_one("h2 a")
+
+            title = title_tag.get_text(strip=True) if title_tag else ""
+            link = title_tag.get("href") if title_tag else ""
+
+            if link.startswith("/"):
+                link = "https://in.indeed.com" + link
+
+            if valid_title(title) and link:
+                jobs.append(("Indeed", title, title, link))
+
+    except:
+        pass
+
 
 # ---------- Naukri ----------
 
-scrape_platform(
-    "Naukri",
-    "https://www.naukri.com/{1}-jobs",
-    "article",
-    "a"
-)
+for term in SEARCH_TERMS:
+    try:
+        url = f"https://www.naukri.com/{term.replace(' ', '-')}-jobs"
+        page = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(page.text, "html.parser")
 
-# ---------- Foundit ----------
+        for card in soup.select("article")[:5]:
+            title_tag = card.select_one("a.title")
 
-scrape_platform(
-    "Foundit",
-    "https://www.foundit.in/srp/results?query={0}",
-    "section",
-    "a"
-)
+            title = title_tag.get_text(strip=True) if title_tag else ""
+            link = title_tag.get("href") if title_tag else ""
 
-# ---------- Glassdoor ----------
+            if valid_title(title) and link:
+                jobs.append(("Naukri", title, title, link))
 
-scrape_platform(
-    "Glassdoor",
-    "https://www.glassdoor.co.in/Job/jobs.htm?sc.keyword={0}",
-    "li",
-    "a"
-)
+    except:
+        pass
 
-# ---------- Wellfound ----------
-
-scrape_platform(
-    "Wellfound",
-    "https://wellfound.com/jobs?query={0}",
-    "div",
-    "a"
-)
 
 # ---------- Final send ----------
 
 for platform, title, desc, link in jobs:
+    if not link.startswith("http"):
+        continue
+
     score = ats_score(resume, desc)
     matched, missing = analyze_match(resume, desc)
 
@@ -245,7 +217,6 @@ for platform, title, desc, link in jobs:
 
     if link not in sent_jobs and score >= 30:
         msg = f"""🔥 {platform} Job Match ({score}%)
-
 Title: {title}
 
 Why this score:
@@ -260,5 +231,5 @@ Apply:
         send_telegram(msg[:3500])
         sent_jobs.append(link)
 
-        with open(SENT_FILE, "w") as f:
-            json.dump(sent_jobs, f)
+with open(SENT_FILE, "w") as f:
+    json.dump(sent_jobs, f)
