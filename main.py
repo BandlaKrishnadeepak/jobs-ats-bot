@@ -1,11 +1,14 @@
-import requests
 import os
 import json
-import re
+import requests
 from datetime import datetime, timedelta
-from bs4 import BeautifulSoup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from jobspy import scrape_jobs
+
+# ─────────────────────────────────────────
+# CONFIG
+# ─────────────────────────────────────────
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -22,11 +25,12 @@ SEARCH_TERMS = [
     "power bi analyst",
     "reporting analyst",
     "bi analyst",
-    "marketing analyst"
+    "marketing analyst",
 ]
 
 BAD_WORDS = [
-    "senior", "lead", "manager", "director", "architect", "5 years", "7 years"
+    "senior", "lead", "manager", "director", "architect",
+    "5 years", "7 years", "10 years",
 ]
 
 IMPORTANT_KEYWORDS = [
@@ -35,8 +39,15 @@ IMPORTANT_KEYWORDS = [
     "kpi", "reporting", "data modeling",
     "forecasting", "statistics", "machine learning",
     "google ads", "meta ads", "looker studio",
-    "cloud scheduler", "crm", "marketing analytics"
+    "cloud scheduler", "crm", "marketing analytics",
 ]
+
+MIN_ATS_SCORE = 30   # Only send jobs with ATS score >= this
+HOURS_OLD = 48       # Only fetch jobs posted in the last 48 hours (2 days)
+
+# ─────────────────────────────────────────
+# LOAD STATE
+# ─────────────────────────────────────────
 
 if os.path.exists(SENT_FILE):
     with open(SENT_FILE, "r") as f:
@@ -47,189 +58,242 @@ else:
 with open("resume.txt", "r", encoding="utf-8") as f:
     resume = f.read()
 
-headers = {
-    "User-Agent": "Mozilla/5.0"
-}
+# ─────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────
 
-jobs = []
-cutoff_date = datetime.utcnow() - timedelta(days=2)
-
-
-def ats_score(resume, jd):
+def ats_score(resume_text, jd):
+    if not jd or not jd.strip():
+        return 0
     vectorizer = TfidfVectorizer(stop_words="english")
-    vectors = vectorizer.fit_transform([resume, jd])
+    vectors = vectorizer.fit_transform([resume_text, jd])
     score = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
     return int(score * 100)
 
 
-def analyze_match(resume, jd):
+def analyze_match(resume_text, jd):
     matched = []
     missing = []
-
+    jd_lower = jd.lower() if jd else ""
+    resume_lower = resume_text.lower()
     for word in IMPORTANT_KEYWORDS:
-        if word in jd.lower():
-            if word in resume.lower():
+        if word in jd_lower:
+            if word in resume_lower:
                 matched.append(word)
             else:
                 missing.append(word)
-
     return matched[:5], missing[:5]
+
+
+def valid_title(title):
+    if not title:
+        return False
+    return not any(bad in title.lower() for bad in BAD_WORDS)
 
 
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": msg}
-    requests.post(url, data=data)
+    data = {"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML"}
+    try:
+        requests.post(url, data=data, timeout=10)
+    except Exception as e:
+        print(f"Telegram error: {e}")
 
 
-def valid_title(title):
-    return not any(bad in title.lower() for bad in BAD_WORDS)
+# ─────────────────────────────────────────
+# SCRAPE JOBS USING JOBSPY
+# ─────────────────────────────────────────
 
+all_jobs = []
+cutoff_date = datetime.utcnow() - timedelta(hours=HOURS_OLD)
 
-# ---------- RemoteOK ----------
+for term in SEARCH_TERMS:
+    print(f"\n🔍 Searching: {term}")
+    try:
+        # ── India sites: Naukri + Indeed India + LinkedIn ──
+        india_jobs = scrape_jobs(
+            site_name=["naukri", "linkedin", "indeed"],
+            search_term=term,
+            location="India",
+            results_wanted=15,
+            hours_old=HOURS_OLD,
+            country_indeed="India",
+            description_format="markdown",
+            verbose=0,
+        )
+        if india_jobs is not None and not india_jobs.empty:
+            all_jobs.append(india_jobs)
+            print(f"  India: {len(india_jobs)} results")
 
+    except Exception as e:
+        print(f"  India scrape error for '{term}': {e}")
+
+    try:
+        # ── Remote jobs: Indeed + LinkedIn remote ──
+        remote_jobs = scrape_jobs(
+            site_name=["indeed", "linkedin"],
+            search_term=f"{term} remote",
+            location="Remote",
+            results_wanted=10,
+            hours_old=HOURS_OLD,
+            is_remote=True,
+            description_format="markdown",
+            verbose=0,
+        )
+        if remote_jobs is not None and not remote_jobs.empty:
+            all_jobs.append(remote_jobs)
+            print(f"  Remote: {len(remote_jobs)} results")
+
+    except Exception as e:
+        print(f"  Remote scrape error for '{term}': {e}")
+
+# ── RemoteOK (free public API) ──
 try:
-    res = requests.get("https://remoteok.com/api", headers=headers)
-    data = res.json()[1:]
-
-    for job in data:
+    import pandas as pd
+    headers = {"User-Agent": "Mozilla/5.0"}
+    res = requests.get("https://remoteok.com/api", headers=headers, timeout=15)
+    remoteok_data = res.json()[1:]
+    remoteok_rows = []
+    for job in remoteok_data:
         title = job.get("position", "")
-        desc = job.get("description", "")
-        link = job.get("url", "")
+        if not any(term in title.lower() for term in SEARCH_TERMS):
+            continue
         date_str = job.get("date", "")
-
         try:
-            posted_date = datetime.fromisoformat(date_str.replace("Z", "+00:00")).replace(tzinfo=None)
-        except:
+            posted_date = datetime.fromisoformat(
+                date_str.replace("Z", "+00:00")
+            ).replace(tzinfo=None)
+        except Exception:
             continue
+        if posted_date < cutoff_date:
+            continue
+        remoteok_rows.append({
+            "title": title,
+            "company": job.get("company", ""),
+            "location": "Remote",
+            "job_url": job.get("url", ""),
+            "description": job.get("description", ""),
+            "site": "remoteok",
+            "date_posted": posted_date,
+        })
+    if remoteok_rows:
+        all_jobs.append(pd.DataFrame(remoteok_rows))
+        print(f"\nRemoteOK: {len(remoteok_rows)} results")
+except Exception as e:
+    print(f"RemoteOK error: {e}")
 
-        if posted_date >= cutoff_date and valid_title(title):
-            if any(term in title.lower() for term in SEARCH_TERMS):
-                jobs.append(("RemoteOK", title, desc, link))
-
-except:
-    pass
-
-
-# ---------- Remotive ----------
-
+# ── Remotive (free public API) ──
 try:
-    res = requests.get("https://remotive.io/api/remote-jobs", headers=headers)
-    data = res.json()["jobs"]
-
-    for job in data:
+    import pandas as pd
+    headers = {"User-Agent": "Mozilla/5.0"}
+    res = requests.get("https://remotive.com/api/remote-jobs", headers=headers, timeout=15)
+    remotive_data = res.json().get("jobs", [])
+    remotive_rows = []
+    for job in remotive_data:
         title = job.get("title", "")
-        desc = job.get("description", "")
-        link = job.get("url", "")
-        date_str = job.get("publication_date", "")
-
-        try:
-            posted_date = datetime.fromisoformat(date_str.replace("Z", "+00:00")).replace(tzinfo=None)
-        except:
+        if not any(term in title.lower() for term in SEARCH_TERMS):
             continue
+        date_str = job.get("publication_date", "")
+        try:
+            posted_date = datetime.fromisoformat(
+                date_str.replace("Z", "+00:00")
+            ).replace(tzinfo=None)
+        except Exception:
+            continue
+        if posted_date < cutoff_date:
+            continue
+        remotive_rows.append({
+            "title": title,
+            "company": job.get("company_name", ""),
+            "location": "Remote",
+            "job_url": job.get("url", ""),
+            "description": job.get("description", ""),
+            "site": "remotive",
+            "date_posted": posted_date,
+        })
+    if remotive_rows:
+        all_jobs.append(pd.DataFrame(remotive_rows))
+        print(f"Remotive: {len(remotive_rows)} results")
+except Exception as e:
+    print(f"Remotive error: {e}")
 
-        if posted_date >= cutoff_date and valid_title(title):
-            if any(term in title.lower() for term in SEARCH_TERMS):
-                jobs.append(("Remotive", title, desc, link))
+# ─────────────────────────────────────────
+# DEDUPLICATE & FILTER
+# ─────────────────────────────────────────
 
-except:
-    pass
+import pandas as pd
 
+if not all_jobs:
+    print("No jobs found across all platforms.")
+    exit(0)
 
-# ---------- LinkedIn ----------
+df = pd.concat(all_jobs, ignore_index=True)
 
-for term in SEARCH_TERMS:
-    try:
-        url = f"https://www.linkedin.com/jobs/search/?keywords={term.replace(' ', '%20')}"
-        page = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(page.text, "html.parser")
+# Drop duplicate URLs
+df = df.drop_duplicates(subset=["job_url"])
 
-        for card in soup.select(".base-search-card")[:5]:
-            title_tag = card.select_one(".base-search-card__title")
-            link_tag = card.select_one("a.base-card__full-link")
+# Enforce 48-hour cutoff
+if "date_posted" in df.columns:
+    df["date_posted"] = pd.to_datetime(df["date_posted"], errors="coerce", utc=True)
+    df = df[
+        df["date_posted"].isna() |
+        (df["date_posted"] >= pd.Timestamp(cutoff_date, tz="UTC"))
+    ]
 
-            title = title_tag.get_text(strip=True) if title_tag else ""
-            link = link_tag["href"] if link_tag else ""
+# Filter bad titles
+df = df[df["title"].apply(valid_title)]
 
-            if valid_title(title) and link:
-                jobs.append(("LinkedIn", title, title, link))
+print(f"\n✅ {len(df)} unique recent jobs after filtering\n")
 
-    except:
-        pass
+# ─────────────────────────────────────────
+# SCORE & SEND
+# ─────────────────────────────────────────
 
+new_count = 0
 
-# ---------- Indeed ----------
+for _, row in df.iterrows():
+    link = str(row.get("job_url", "")).strip()
+    title = str(row.get("title", "")).strip()
+    company = str(row.get("company", "")).strip()
+    location = str(row.get("location", "")).strip()
+    desc = str(row.get("description", "")).strip()
+    platform = str(row.get("site", "Unknown")).strip().title()
 
-for term in SEARCH_TERMS:
-    try:
-        url = f"https://in.indeed.com/jobs?q={term.replace(' ', '+')}"
-        page = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(page.text, "html.parser")
-
-        for card in soup.select(".job_seen_beacon")[:5]:
-            title_tag = card.select_one("h2 a")
-
-            title = title_tag.get_text(strip=True) if title_tag else ""
-            link = title_tag.get("href") if title_tag else ""
-
-            if link.startswith("/"):
-                link = "https://in.indeed.com" + link
-
-            if valid_title(title) and link:
-                jobs.append(("Indeed", title, title, link))
-
-    except:
-        pass
-
-
-# ---------- Naukri ----------
-
-for term in SEARCH_TERMS:
-    try:
-        url = f"https://www.naukri.com/{term.replace(' ', '-')}-jobs"
-        page = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(page.text, "html.parser")
-
-        for card in soup.select("article")[:5]:
-            title_tag = card.select_one("a.title")
-
-            title = title_tag.get_text(strip=True) if title_tag else ""
-            link = title_tag.get("href") if title_tag else ""
-
-            if valid_title(title) and link:
-                jobs.append(("Naukri", title, title, link))
-
-    except:
-        pass
-
-
-# ---------- Final send ----------
-
-for platform, title, desc, link in jobs:
-    if not link.startswith("http"):
+    if not link or not link.startswith("http"):
+        continue
+    if link in sent_jobs:
         continue
 
     score = ats_score(resume, desc)
     matched, missing = analyze_match(resume, desc)
 
     reason = f"Matched: {', '.join(matched)}" if matched else "Few direct keyword matches"
-    improve = f"Add: {', '.join(missing)}" if missing else "Resume already covers major keywords"
+    improve = f"Add to resume: {', '.join(missing)}" if missing else "Resume already covers major keywords"
 
-    if link not in sent_jobs and score >= 30:
-        msg = f"""🔥 {platform} Job Match ({score}%)
-Title: {title}
+    date_info = ""
+    if "date_posted" in row and pd.notna(row["date_posted"]):
+        date_info = f"\n📅 Posted: {row['date_posted'].strftime('%d %b %Y')}"
 
-Why this score:
-{reason}
-
-Improve score:
-{improve}
-
-Apply:
-{link}
-"""
-        send_telegram(msg[:3500])
+    if score >= MIN_ATS_SCORE:
+        msg = (
+            f"🔥 <b>{platform}</b> — ATS Match: <b>{score}%</b>\n"
+            f"💼 <b>{title}</b>\n"
+            f"🏢 {company}  |  📍 {location}"
+            f"{date_info}\n\n"
+            f"✅ {reason}\n"
+            f"📝 {improve}\n\n"
+            f"🔗 <a href='{link}'>Apply Now</a>"
+        )
+        send_telegram(msg[:4096])
         sent_jobs.append(link)
+        new_count += 1
+        print(f"  Sent: [{score}%] {title} @ {company}")
+
+# ─────────────────────────────────────────
+# SAVE STATE
+# ─────────────────────────────────────────
 
 with open(SENT_FILE, "w") as f:
     json.dump(sent_jobs, f)
+
+print(f"\n📨 Done. Sent {new_count} new job alerts.")
